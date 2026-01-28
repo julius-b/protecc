@@ -25,7 +25,8 @@ image::doc/screen1.png[]
 * youtube: https://www.youtube.com/watch?v=3UxnelT9aCo&list=PLsk-HSGFjnaGQq7ybM8Lgkh5EMxUWPm2i[Tile-based game Part 1: Setting up]
 * github: https://github.com/kidscancode/pygame_tutorials[kidscancode/pygame_tutorials]
 * current modifications:
-** added <<server.py>>, <<client.py>>
+** added link:server.py[], link:client.py[]
+** updated main game loop to consider incoming packets
 
 .graphics:
 * https://kenney.nl/assets/top-down-shooter (CC0)
