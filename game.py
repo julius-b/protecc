@@ -5,6 +5,7 @@ from os import path
 from const import *
 from sprites import *
 from tilemap import *
+from util import *
 from client import NetClient
 import queue
 import struct
@@ -56,6 +57,7 @@ class Game:
         self.dim_screen.fill((0, 0, 0, 180))
         self.player_img = pg.image.load(path.join(img_dir, PLAYER_IMG)).convert_alpha()
         self.peer_img = pg.image.load(path.join(img_dir, PEER_IMG)).convert_alpha()
+        self.mine_img = pg.image.load(path.join(img_dir, MINE_IMG)).convert_alpha()
         self.bullet_images = {}
         self.bullet_images['lg'] = pg.image.load(path.join(img_dir, BULLET_IMG)).convert_alpha()
         self.bullet_images['sm'] = pg.transform.scale(self.bullet_images['lg'], (10, 10))
@@ -63,10 +65,13 @@ class Game:
         self.splat = pg.image.load(path.join(img_dir, SPLAT)).convert_alpha()
         self.splat = pg.transform.scale(self.splat, (64, 64))
         self.gun_flashes = []
+        self.boom = []
         self.peers = {}
 
         for img in MUZZLE_FLASHES:
             self.gun_flashes.append(pg.image.load(path.join(img_dir, img)).convert_alpha())
+        for img in BOOM:
+            self.boom.append(pg.image.load(path.join(img_dir, img)).convert_alpha())
         self.item_images = {}
         for item in ITEM_IMAGES:
             self.item_images[item] = pg.image.load(path.join(img_dir, ITEM_IMAGES[item])).convert_alpha()
@@ -88,7 +93,7 @@ class Game:
             self.weapon_sounds[weapon] = []
             for snd in WEAPON_SOUNDS[weapon]:
                 s = pg.mixer.Sound(path.join(snd_dir, snd))
-                s.set_volume(0.3)
+                s.set_volume(0.2)
                 self.weapon_sounds[weapon].append(s)
         self.zombie_moan_sounds = []
         for snd in ZOMBIE_MOAN_SOUNDS:
@@ -101,12 +106,16 @@ class Game:
         self.zombie_hit_sounds = []
         for snd in ZOMBIE_HIT_SOUNDS:
             self.zombie_hit_sounds.append(pg.mixer.Sound(path.join(snd_dir, snd)))
+        self.boom_sounds = []
+        for snd in BOOM_SOUNDS:
+            self.boom_sounds.append(pg.mixer.Sound(path.join(snd_dir, snd)))
 
     def new(self):
         # initialize all variables and do all the setup for a new game
         self.all_sprites = pg.sprite.LayeredUpdates()
         self.walls = pg.sprite.Group()
         self.mobs = pg.sprite.Group()
+        self.mines = pg.sprite.Group()
         self.bullets = pg.sprite.Group()
         self.items = pg.sprite.Group()
         self.map = TiledMap(path.join(self.map_dir, 'level1.tmx'))
@@ -195,7 +204,17 @@ class Game:
             for bullet in hits[mob]:
                 mob.health -= bullet.damage
             mob.vel = vec(0, 0)
-        
+
+        # ALT:
+        # groupcollide(mines, mobs, radius) (list of all mines triggered),
+        # for those groupcollide(triggered, mines, boom_radius) (expand triggered until groupcollide returns same size)
+        # for those groupcollide(triggered, mobs, boom_radius)
+        # if collideany: set boom = True
+        # mine update: if self.boom, dmg all explosion_radius mobs and set all mines.boom = True -> each frame will expand boom
+        for mine in self.mines:
+            if pg.sprite.spritecollideany(mine, self.mobs, radius_collision):
+                mine.boom = True
+
         # combine pos & rot, usually both occur at the same time and sending 2 packets would be more effort
         pp = (self.player.pos.copy(), self.player.rot, self.player.health)
         #print(f"curr: {player_packet}")
@@ -263,6 +282,8 @@ class Game:
                     self.paused = not self.paused
                 if event.key == pg.K_n:
                     self.night = not self.night
+                if event.key == pg.K_b:
+                    self.player.place_mine()
 
     def show_start_screen(self):
         pass

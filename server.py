@@ -12,16 +12,18 @@ log = logging.getLogger(__name__)
 coloredlogs.install(level='DEBUG') # , logger=log
 
 # TODO mutex for all lobby edits - mutex per lobby
+# NOTE: single connection per peer
 class Lobby():
     def __init__(self, host, txbuf):
         pid = 0
+        # entry remains after disconnect
         self.auth = {host: pid}
+        # entry removed on disconnect
         self.peers = {pid: txbuf}
 
     def add(self, nick, txbuf):
         # TODO need mutex around this
         # update txbuf - only one connection per peer, assume reconnect, TODO determine if active connection, should be removed via close!
-        # DON'T REMOVE, KEEP server-gen ID!
         if nick not in self.auth:
             self.auth[nick] = len(self.auth)
         pid = self.auth[nick]

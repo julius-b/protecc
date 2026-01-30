@@ -7,7 +7,7 @@ WARNING:: early WIP, idk Python
 image::doc/screen1.png[]
 
 .Requirements
-* allow reconnect
+* allow reconnect (retaining player state)
 ** if non-temporary disconnect: pass resources to remaining user
 ** do not rely on IP (e.g. train hotspot) for id
 * allow for high delay
@@ -63,4 +63,14 @@ $ ---
 # server connection test
 $ sudo pacman -S socat
 $ socat - TCP4:localhost:3579
+----
+
+== Other
+.Audio
+[source,shell]
+----
+#$ ffmpeg -i mp4 -vn -acodec copy boom-audio.aac
+$ ffmpeg -i mp4 -vn boom-audio.wav
+$ ffmpeg -ss 4.4 -i boom-audio.wav -t 1 -c copy boom1.wav
+$ ffmpeg -ss 6.15 -i boom-audio.wav -t 0.9 -c copy boom2.wav
 ----

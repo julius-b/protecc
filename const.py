@@ -53,6 +53,8 @@ WEAPONS['shotgun'] = {'bullet_speed': 400,
                       'bullet_size': 'sm',
                       'bullet_count': 12}
 
+MINE_IMG = 'spaceBuilding_009.png'
+
 # Mob settings
 MOB_IMG = 'zombie1_hold.png'
 MOB_SPEEDS = [150, 100, 75, 125]
@@ -66,6 +68,8 @@ DETECT_RADIUS = 400
 # Effects
 MUZZLE_FLASHES = ['whitePuff15.png', 'whitePuff16.png', 'whitePuff17.png',
                   'whitePuff18.png']
+BOOM = ['boom/explosion1.png', 'boom/explosion2.png', 'boom/explosion3.png',
+        'boom/explosion4.png', 'boom/explosion5.png']
 SPLAT = 'splat green.png'
 FLASH_DURATION = 50
 DAMAGE_ALPHA = [i for i in range(0, 255, 55)]
@@ -99,6 +103,7 @@ WEAPON_SOUNDS = {'pistol': ['pistol.wav'],
 EFFECTS_SOUNDS = {#'level_start': 'level_start.wav',
                   'health_up': 'health_pack.wav',
                   'gun_pickup': 'gun_pickup.wav'}
+BOOM_SOUNDS = ['boom1.wav', 'boom2.wav']
 
 PLAYER_PACKET = '!cBfffB'
 MSG_PLAYER = b'p'

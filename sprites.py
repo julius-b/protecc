@@ -1,6 +1,7 @@
 import pygame as pg
 from random import uniform, choice, randint, random
 from const import *
+from util import *
 from tilemap import collide_hit_rect
 import pytweening as tween
 from itertools import chain
@@ -25,6 +26,45 @@ def collide_with_walls(sprite, group, dir):
                 sprite.pos.y = hits[0].rect.bottom + sprite.hit_rect.height / 2
             sprite.vel.y = 0
             sprite.hit_rect.centery = sprite.pos.y
+
+# TODO debug draw both radii
+# explosion radius wider than detection radius, otherwise only one mob at a time is hit
+# TODO crater?
+class Mine(pg.sprite.Sprite):
+    def __init__(self, game, pos, owner):
+        self._layer = ITEMS_LAYER
+        self.groups = game.all_sprites, game.mines
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+        size = 25
+        self.image = pg.transform.scale(game.mine_img, (size, size))
+        self.rect = self.image.get_rect()
+        self.rect.center = pos
+        self.owner = owner
+        self.boom = False
+        # TODO radius dmg falloff, linear or sqrt?
+        self.dmg = 200
+        self.radius = 45
+        self.boom_radius = self.radius*3
+    
+    def update(self):
+        if not self.boom:
+            return
+
+        hits = pg.sprite.spritecollide(self, self.game.mines, False, boom_collision)
+        for hit in hits:
+            hit.boom = True
+
+        hits = pg.sprite.spritecollide(self, self.game.mobs, False, boom_collision)
+        for hit in hits:
+            hit.health -= self.dmg
+
+        snd = self.game.boom_sounds[1] #choice(self.game.boom_sounds)
+        if snd.get_num_channels() > 2:
+            snd.stop()
+        snd.play()
+        Boom(self.game, self.rect.center, self.dmg-10)
+        self.kill()
 
 class Peer(pg.sprite.Sprite):
     def __init__(self, game, x, y, rot, health):
@@ -93,6 +133,10 @@ class Player(pg.sprite.Sprite):
                     snd.stop()
                 snd.play()
             MuzzleFlash(self.game, pos)
+
+    def place_mine(self):
+        # TODO distance to closest mine has to be at least radius*2.5
+        Mine(self.game, self.pos, True)
 
     def hit(self):
         self.damaged = True
@@ -235,6 +279,26 @@ class MuzzleFlash(pg.sprite.Sprite):
 
     def update(self):
         if pg.time.get_ticks() - self.spawn_time > FLASH_DURATION:
+            self.kill()
+
+class Boom(pg.sprite.Sprite):
+    def __init__(self, game, pos, size):
+        self._layer = EFFECTS_LAYER
+        self.groups = game.all_sprites
+        pg.sprite.Sprite.__init__(self, self.groups)
+        self.game = game
+        self.size = size
+        self.image = pg.transform.scale(self.game.boom[0], (size, size))
+        self.rect = self.image.get_rect()
+        self.pos = pos
+        self.rect.center = pos
+        self.spawn_time = pg.time.get_ticks()
+    
+    def update(self):
+        frame = (pg.time.get_ticks() - self.spawn_time) // 60
+        if len(self.game.boom) > frame:
+            self.image = pg.transform.scale(self.game.boom[frame], (self.size, self.size))
+        else:
             self.kill()
 
 class Item(pg.sprite.Sprite):
