@@ -1,17 +1,19 @@
 import pygame as pg
 import sys
+import re
+import queue
+import struct
 from random import choice, random
 from os import path
 from const import *
 from sprites import *
 from tilemap import *
 from util import *
+from items import *
 from client import NetClient
-import queue
-import struct
 
 # HUD functions
-def draw_player_health(surf, x, y, pct):
+def draw_player_health(surface, x, y, pct):
     if pct < 0:
         pct = 0
     BAR_LENGTH = 100
@@ -25,8 +27,8 @@ def draw_player_health(surf, x, y, pct):
         col = YELLOW
     else:
         col = RED
-    pg.draw.rect(surf, col, fill_rect)
-    pg.draw.rect(surf, WHITE, outline_rect, 2)
+    pg.draw.rect(surface, col, fill_rect)
+    pg.draw.rect(surface, WHITE, outline_rect, 2)
 
 class Game:
     def __init__(self, client, pid):
@@ -55,9 +57,19 @@ class Game:
         self.hud_font = path.join(img_dir, 'Impacted2.0.ttf')
         self.dim_screen = pg.Surface(self.screen.get_size()).convert_alpha()
         self.dim_screen.fill((0, 0, 0, 180))
-        self.player_img = pg.image.load(path.join(img_dir, PLAYER_IMG)).convert_alpha()
-        self.peer_img = pg.image.load(path.join(img_dir, PEER_IMG)).convert_alpha()
-        self.mine_img = pg.image.load(path.join(img_dir, MINE_IMG)).convert_alpha()
+        self.player_imgs = {}
+        for img in PLAYER_IMGS:
+            name = re.findall(r'_(\w+).', img)[0]
+            self.player_imgs[name] = pg.image.load(path.join(img_dir, img)).convert_alpha()
+        self.peer_imgs = {}
+        for img in PEER_IMGS:
+            name = re.findall(r'_(\w+).', img)[0]
+            self.peer_imgs[name] = pg.image.load(path.join(img_dir, img)).convert_alpha()
+        self.mine_img = pg.transform.scale(pg.image.load(path.join(img_dir, MINE_IMG)), (25, 25)).convert_alpha()
+        self.turret_base_img = pg.transform.scale(pg.image.load(path.join(img_dir, TURRET_BASE_IMG)).convert_alpha(), (40, 40))
+        self.turret_top_imgs = []
+        for img in TURRET_TOP_IMGS:
+            self.turret_top_imgs.append(pg.transform.scale(pg.image.load(path.join(img_dir, img)).convert_alpha(), (32, 32))) # 36
         self.bullet_images = {}
         self.bullet_images['lg'] = pg.image.load(path.join(img_dir, BULLET_IMG)).convert_alpha()
         self.bullet_images['sm'] = pg.transform.scale(self.bullet_images['lg'], (10, 10))
@@ -75,6 +87,23 @@ class Game:
         self.item_images = {}
         for item in ITEM_IMAGES:
             self.item_images[item] = pg.image.load(path.join(img_dir, ITEM_IMAGES[item])).convert_alpha()
+        self.item_images['health'] = pg.transform.scale(self.item_images['health'], (35, 35))
+        self.item_images['pow'] = pg.transform.scale(self.item_images['pow'], (32, 32))
+        # png has margins (pixel counting, (8+8+8)x2)...
+        item_pistol = pg.Surface((13, 9), pg.SRCALPHA)
+        item_pistol.blit(self.item_images['pistol'], (-5, -8))
+        self.item_images['pistol'] = pg.transform.scale(item_pistol, (13*2.5, 9*2.5))
+        item_shotgun = pg.Surface((18, 11), pg.SRCALPHA)
+        item_shotgun.blit(self.item_images['shotgun'], (-3, -5))
+        self.item_images['shotgun'] = pg.transform.scale(item_shotgun, (18*2, 11*2))
+        self.item_images['rifle'] = pg.transform.scale(self.item_images['rifle'], (45, 45))
+        self.item_images['boom'] = pg.transform.scale(self.item_images['boom'], (25, 25)).convert_alpha()
+        self.item_images['callisto'] = Turret.base_img(self, 0)
+        self.inv_images = {}
+        for item in ITEM_IMAGES:
+            self.inv_images[item] = pg.transform.smoothscale_by(self.item_images[item], 1.5)
+        # TODO combine item_imgs, inv_imgs...
+        self.inv_images['callisto'] = self.item_images['callisto']
 
         # lighting effect
         self.fog = pg.Surface((WIDTH, HEIGHT))
@@ -116,8 +145,13 @@ class Game:
         self.walls = pg.sprite.Group()
         self.mobs = pg.sprite.Group()
         self.mines = pg.sprite.Group()
+        self.turrets = pg.sprite.Group()
+        self.placeables = pg.sprite.Group()
+        self.missiles = pg.sprite.Group()
         self.bullets = pg.sprite.Group()
         self.items = pg.sprite.Group()
+        self.peers = pg.sprite.Group()
+        self.inventory = Inventory(self)
         self.map = TiledMap(path.join(self.map_dir, 'level1.tmx'))
         self.map_img = self.map.make_map()
         self.map.rect = self.map_img.get_rect()
@@ -131,7 +165,9 @@ class Game:
             if tile_object.name == 'wall':
                 Obstacle(self, tile_object.x, tile_object.y,
                          tile_object.width, tile_object.height)
-            if tile_object.name in ['health', 'shotgun']:
+            if tile_object.name == 'turret':
+                Turret(self, (obj_center.x, obj_center.y), True)
+            if tile_object.name in WEAPONS or tile_object.name in CONSUMABLES or tile_object.name in MINES or tile_object.name in PLACEABLES:
                 Item(self, obj_center, tile_object.name)
         self.camera = Camera(self.map.width, self.map.height)
         self.draw_debug = False
@@ -170,21 +206,16 @@ class Game:
                             self.peers[peer].apply(m[2], m[3], m[4], m[5])
             except queue.Empty:
                 break
-        
+
         self.all_sprites.update()
         self.camera.update(self.player)
         #if len(self.mobs) == 0:
         #    self.playing = False
         hits = pg.sprite.spritecollide(self.player, self.items, False)
         for hit in hits:
-            if hit.type == 'health' and self.player.health < PLAYER_HEALTH:
-                hit.kill()
-                self.effects_sounds['health_up'].play()
-                self.player.add_health(HEALTH_PACK_AMOUNT)
-            if hit.type == 'shotgun':
-                hit.kill()
-                self.effects_sounds['gun_pickup'].play()
-                self.player.weapon = 'shotgun'
+            self.inventory.add(hit.item)
+            hit.kill()
+            self.effects_sounds['gun_pickup'].play()
         # mobs hit player
         hits = pg.sprite.spritecollide(self.player, self.mobs, False, collide_hit_rect)
         for hit in hits:
@@ -202,8 +233,10 @@ class Game:
         for mob in hits:
             # hit.health -= WEAPONS[self.player.weapon]['damage'] * len(hits[hit])
             for bullet in hits[mob]:
-                mob.health -= bullet.damage
-            mob.vel = vec(0, 0)
+                mob.health -= bullet.dmg
+            # stopping power
+            #mob.vel = vec(0, 0)
+            mob.vel = mob.vel * 0.8
 
         # ALT:
         # groupcollide(mines, mobs, radius) (list of all mines triggered),
@@ -263,17 +296,17 @@ class Game:
         draw_player_health(self.screen, 10, 10, self.player.health / PLAYER_HEALTH)
         self.draw_text('Zombies: {}'.format(len(self.mobs)), self.hud_font, 30, WHITE,
                        WIDTH - 10, 10, align="topright")
+        self.inventory.draw(self.screen)
         if self.paused:
             self.screen.blit(self.dim_screen, (0, 0))
             self.draw_text("Paused", self.title_font, 105, RED, WIDTH / 2, HEIGHT / 2, align="center")
         pg.display.flip()
 
     def events(self):
-        # catch all events here
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 self.quit()
-            if event.type == pg.KEYDOWN:
+            elif event.type == pg.KEYDOWN:
                 if event.key == pg.K_ESCAPE:
                     self.quit()
                 if event.key == pg.K_h:
@@ -282,8 +315,13 @@ class Game:
                     self.paused = not self.paused
                 if event.key == pg.K_n:
                     self.night = not self.night
-                if event.key == pg.K_b:
-                    self.player.place_mine()
+                if event.unicode.isdigit():
+                    self.inventory.select(int(event.unicode) - 1)
+                #if event.key == pg.K_b:
+                #    self.player.place_mine()
+            elif event.type == pg.MOUSEBUTTONDOWN:
+                pos = pg.mouse.get_pos()
+                self.inventory.click(pos)
 
     def show_start_screen(self):
         pass

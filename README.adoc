@@ -18,7 +18,7 @@ image::doc/screen1.png[]
 * UDP? IPv6?
 * keepalive / ping, see builtin python?
 
-.status:
+.multiplayer status:
 * player movement synced, worlds are *completely* unsynced :)
 
 .original game (without multiplayer):
@@ -29,7 +29,8 @@ image::doc/screen1.png[]
 ** updated main game loop to consider incoming packets
 
 .graphics:
-* https://kenney.nl/assets/top-down-shooter (CC0)
+* map: https://kenney.nl/assets/top-down-shooter (CC0)
+* items: https://kenney.nl/assets/pixel-shmup (CC0), https://kenney.nl/assets/desert-shooter-pack (CC0), https://kenney.nl/assets/space-shooter-redux (CC0)
 
 .run the game
 [source,shell]
